@@ -6,7 +6,7 @@ const nodemailer = require('nodemailer');
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_PASS,
   },
-}); */
+});  */
 
 const transporter = nodemailer.createTransport({
    host: "smtp.titan.email",
@@ -17,7 +17,7 @@ const transporter = nodemailer.createTransport({
     pass: process.env.EMAIL_PASS
   }
 });
-
+ 
 const sendOfferLetter = async (to, offer) => {
   const pdfBuffer = await require('./pdfGenerator')(offer);
 

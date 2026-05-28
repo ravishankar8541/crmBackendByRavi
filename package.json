@@ -13,6 +13,7 @@
     "nodemailer": "^8.0.1",
     "nodemon": "^3.1.14",
     "number-to-words": "^1.2.4",
+    "pdfkit": "^0.18.0",
     "puppeteer": "^24.37.5"
   },
   "name": "backend",
