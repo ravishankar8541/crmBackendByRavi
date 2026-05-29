@@ -2,6 +2,8 @@ const Bill = require('../models/Bill');
 const Client = require('../models/Client');
 const ServiceBill = require('../models/ServiceBill');
 const PDFDocument = require('pdfkit');
+const fs = require('fs');
+const path = require('path');
 
 const generateBillNumber = async (retryCount = 0) => {
     const year = new Date().getFullYear();
@@ -707,278 +709,510 @@ exports.getPaymentHistory = async (req, res) => {
     }
 };
 
-// Download bill as PDF - PERFECT DESIGN MATCHING SAMPLE INVOICE
 exports.downloadBill = async (req, res) => {
     try {
         const bill = await Bill.findById(req.params.id)
             .populate('clientId', 'name companyName email phone address gstNumber');
 
         if (!bill) {
-            return res.status(404).json({
-                success: false,
-                message: 'Bill not found'
-            });
+            return res.status(404).json({ success: false, message: 'Bill not found' });
         }
 
-        // Set response headers for PDF download
         res.setHeader('Content-Type', 'application/pdf');
         res.setHeader('Content-Disposition', `attachment; filename="invoice-${bill.billNumber}.pdf"`);
 
-        // Create PDF document
         const doc = new PDFDocument({
             margin: 50,
-            size: 'A4'
+            size: 'A4',
+            bufferPages: true
         });
 
         doc.pipe(res);
 
-        // ========== HEADER WITH BORDER ==========
-        // Top border line
-        doc.strokeColor('#000000').lineWidth(1)
-            .moveTo(50, 50)
-            .lineTo(550, 50)
-            .stroke();
+        // ==================== COLORS & STYLES ====================
+        const colors = {
+            primary: '#1E3A8A',      // Deep Blue (main brand color)
+            secondary: '#3B82F6',    // Lighter blue accent
+            accent: '#E31E24',       // Red accent for company name
+            success: '#10B981',
+            warning: '#F59E0B',
+            danger: '#EF4444',
+            textDark: '#111827',
+            textMedium: '#4B5563',
+            textLight: '#6B7280',
+            border: '#E5E7EB',
+            bgLight: '#F8FAFC',
+            bgCard: '#F0F9FF'
+        };
 
-        doc.moveDown(0.5);
+        // Helper function for currency formatting
+        const formatCurrency = (amount) => {
+            return `₹${(amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+        };
 
-        // Company Name - Large Font
-        doc.fontSize(24)
-            .font('Helvetica-Bold')
-            .fillColor('#000000')
-            .text('VIRAL ADS MEDIA', { align: 'center' });
-
-        doc.moveDown(0.3);
-
-        // Company Address
-        doc.fontSize(9)
-            .font('Helvetica')
-            .fillColor('#333333')
-            .text('B-27, Khatu shyam Mandir Road, near Max Bazar, Budh Vihar Phase I', { align: 'center' });
-        doc.text('New Delhi, Delhi, India - 110086', { align: 'center' });
-        doc.text('GSTIN: 07DTXPK7339P1ZF | PAN: DTXPK7339P', { align: 'center' });
-        doc.text('Email: info@viraladsmedia.com | Phone: +91 93544 91934', { align: 'center' });
-
-        doc.moveDown(0.8);
-
-        // Decorative line
-        doc.strokeColor('#000000').lineWidth(0.5)
-            .moveTo(50, doc.y)
-            .lineTo(550, doc.y)
-            .stroke();
-
-        doc.moveDown(1);
-
-        // ========== INVOICE TITLE SECTION ==========
-        doc.fontSize(18)
-            .font('Helvetica-Bold')
-            .fillColor('#000000')
-            .text('INVOICE', { align: 'center' });
-
-        doc.moveDown(0.5);
-
-        // Invoice Number and Date - Right Aligned
-        doc.fontSize(10)
-            .font('Helvetica')
-            .fillColor('#000000');
-
-        // Get invoice number without slashes for display
-        const displayBillNumber = bill.billNumber.replace(/\//g, '#');
-
-        doc.text(`Invoice No # ${displayBillNumber}`, { align: 'right' });
-        doc.text(`Invoice Date ${new Date(bill.billDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}`, { align: 'right' });
-
-        doc.moveDown(1.5);
-
-        // ========== BILLED BY & BILLED TO SECTION ==========
-        const startY = doc.y;
-
-        // Billed By Section
-        doc.fontSize(10)
-            .font('Helvetica-Bold')
-            .fillColor('#000000')
-            .text('Billed By', 50, startY);
-
-        doc.fontSize(9)
-            .font('Helvetica')
-            .fillColor('#333333');
-
-        let billedByY = startY + 15;
-        doc.text('Viral Ads Media', 50, billedByY);
-        doc.text('B-27, Khatu shyam Mandir Road, near Max Bazar,', 50, billedByY + 15);
-        doc.text('Budh Vihar Phase I, New Delhi, Delhi,', 50, billedByY + 30);
-        doc.text('India - 110086', 50, billedByY + 45);
-        doc.text('GSTIN: 07DTXPK7339P1ZF', 50, billedByY + 60);
-        doc.text('PAN: DTXPK7339P', 50, billedByY + 75);
-        doc.text('Email: info@viraladsmedia.com', 50, billedByY + 90);
-        doc.text('Phone: +91 93544 91934', 50, billedByY + 105);
-
-        // Billed To Section
-        doc.font('Helvetica-Bold')
-            .fillColor('#000000')
-            .text('Billed To', 310, startY);
-
-        doc.font('Helvetica')
-            .fillColor('#333333');
-
-        const clientCompany = bill.clientId.companyName || bill.clientId.name || 'N/A';
-        doc.text(clientCompany, 310, startY + 15);
-
-        if (bill.clientId.address) {
-            const address = bill.clientId.address;
-            // Split address into lines if it's long
-            if (address.length > 50) {
-                const addressPart1 = address.substring(0, 45);
-                const addressPart2 = address.substring(45);
-                doc.text(addressPart1, 310, startY + 30);
-                doc.text(addressPart2, 310, startY + 45);
+        // ==================== LOGO (LEFT SIDE TOP) ====================
+        const logoPath = path.join(__dirname, '../assets/blackLogo.png');
+        try {
+            if (fs.existsSync(logoPath)) {
+                doc.image(logoPath, 50, 35, { width: 70 });
             } else {
-                doc.text(address, 310, startY + 30);
+                console.log('Logo not found at:', logoPath);
             }
+        } catch (err) {
+            console.log('Logo error:', err.message);
         }
 
-        if (bill.clientId.gstNumber) {
-            doc.text(`GSTIN: ${bill.clientId.gstNumber}`, 310, startY + 60);
-        }
-        if (bill.clientId.email) {
-            doc.text(`Email: ${bill.clientId.email}`, 310, startY + 75);
-        }
-        if (bill.clientId.phone) {
-            doc.text(`Phone: ${bill.clientId.phone}`, 310, startY + 90);
-        }
+        // ==================== HEADER SECTION ====================
+        // Company Name with accent color
+        doc.fontSize(24)
+           .font('Helvetica-Bold')
+           .fillColor(colors.accent)
+           .text('VIRAL ADS MEDIA', 300, 40, { align: 'right' });
 
-        doc.moveDown(8);
+        doc.fontSize(9)
+           .font('Helvetica')
+           .fillColor(colors.textMedium)
+           .text('DIGITAL CREATIVE AGENCY', 300, 68, { align: 'right' });
 
-        // ========== SERVICE DETAILS TABLE ==========
-        const tableTop = doc.y;
+        // Invoice Title with premium styling
+        doc.fontSize(28)
+           .font('Helvetica-Bold')
+           .fillColor(colors.primary)
+           .text('INVOICE', 140, 45);
 
-        // Calculate taxable amount and GST
-        const taxableAmount = bill.totalAmount - (bill.gstAmount || 0);
-        const cgstAmount = (bill.gstAmount || 0) / 2;
-        const sgstAmount = (bill.gstAmount || 0) / 2;
-        const gstRate = taxableAmount > 0 ? (bill.gstAmount / taxableAmount) * 100 : 0;
+        // Invoice metadata box
+        const metaBoxX = 400;
+        const metaBoxY = 35;
+        doc.roundedRect(metaBoxX - 10, metaBoxY, 155, 70, 5)
+           .fill(colors.bgLight)
+           .stroke(colors.border);
 
-        // Table Header - Matching sample
-        doc.font('Helvetica-Bold').fontSize(9).fillColor('#000000');
-
-        // Draw table header background
-        doc.rect(50, tableTop, 500, 25).fill('#f0f0f0');
-        doc.fillColor('#000000');
-
-        doc.text('Item', 60, tableTop + 8);
-        doc.text('GST Rate', 220, tableTop + 8);
-        doc.text('Quantity', 320, tableTop + 8);
-        doc.text('Rate', 390, tableTop + 8);
-        doc.text('Amount', 460, tableTop + 8);
-        doc.text('CGST', 510, tableTop + 8, { align: 'right', width: 40 });
-
-        // Table Row
-        let rowY = tableTop + 25;
-
-        doc.rect(50, rowY, 500, 70).fill('#ffffff');
-        doc.fillColor('#333333');
-        doc.font('Helvetica').fontSize(9);
-
-        // Service name and description
-        doc.text('1.', 60, rowY + 10);
-        doc.text(bill.serviceName || 'Service', 75, rowY + 10, { width: 130 });
-
-        // Description
-        if (bill.description) {
-            doc.fontSize(8).fillColor('#666666');
-            doc.text(bill.description, 75, rowY + 25, { width: 130 });
-            doc.fontSize(9).fillColor('#333333');
+        doc.fontSize(9)
+           .font('Helvetica-Bold')
+           .fillColor(colors.textDark);
+        
+        const cleanBillNumber = bill.billNumber.replace(/\//g, '');
+        doc.text('INVOICE NO', metaBoxX, metaBoxY + 8);
+        doc.font('Helvetica').fillColor(colors.primary);
+        doc.text(cleanBillNumber, metaBoxX, metaBoxY + 22);
+        
+        doc.font('Helvetica-Bold').fillColor(colors.textDark);
+        doc.text('INVOICE DATE', metaBoxX, metaBoxY + 42);
+        doc.font('Helvetica').fillColor(colors.textMedium);
+        doc.text(new Date(bill.billDate).toLocaleDateString('en-US', { 
+            month: 'short', day: 'numeric', year: 'numeric' 
+        }), metaBoxX, metaBoxY + 56);
+        
+        if (bill.dueDate) {
+            doc.font('Helvetica-Bold').fillColor(colors.textDark);
+            doc.text('DUE DATE', metaBoxX, metaBoxY + 72);
+            doc.font('Helvetica').fillColor(colors.danger);
+            doc.text(new Date(bill.dueDate).toLocaleDateString('en-US', { 
+                month: 'short', day: 'numeric', year: 'numeric' 
+            }), metaBoxX, metaBoxY + 86);
         }
 
-        // Table values
-        doc.text(`${Math.round(gstRate)}%`, 220, rowY + 10);
-        doc.text('1', 325, rowY + 10);
+        // Decorative divider
+        doc.moveTo(50, 115).lineTo(545, 115).lineWidth(0.8).stroke(colors.border);
+        doc.moveTo(50, 116).lineTo(545, 116).lineWidth(0.3).stroke(colors.border);
 
-        const unitRate = taxableAmount;
-        doc.text(`₹${unitRate.toLocaleString('en-IN')}`, 390, rowY + 10);
-        doc.text(`₹${taxableAmount.toLocaleString('en-IN')}`, 460, rowY + 10);
-        doc.text(`₹${cgstAmount.toLocaleString('en-IN')}`, 510, rowY + 10, { align: 'right' });
+        // ==================== BILLED BY & BILLED TO ====================
+        const billedY = 135;
 
-        doc.moveDown(5);
+        // Billed By Card
+        doc.roundedRect(50, billedY, 240, 130, 6)
+           .fill(colors.bgLight)
+           .stroke(colors.border);
+        
+        doc.fontSize(10)
+           .font('Helvetica-Bold')
+           .fillColor(colors.primary)
+           .text('BILLED BY', 60, billedY + 12);
+        
+        doc.fontSize(9)
+           .font('Helvetica')
+           .fillColor(colors.textMedium);
+        
+        let byY = billedY + 32;
+        doc.text('Viral Ads Media', 60, byY);
+        doc.text('B-27, Khatu shyam Mandir Road, near Max Bazar,', 60, byY + 14);
+        doc.text('Budh Vihar Phase I, New Delhi, Delhi,', 60, byY + 28);
+        doc.text('India - 110086', 60, byY + 42);
+        doc.text('GSTIN: 07DTXPK7339P1ZF', 60, byY + 58);
+        doc.text('PAN: DTXPK7339P', 60, byY + 72);
+        doc.text('Email: info@viraladsmedia.com', 60, byY + 86);
+        doc.text('Phone: +91 93544 91934', 60, byY + 100);
 
-        // ========== AMOUNT SUMMARY SECTION ==========
-        const summaryY = rowY + 90;
+        // Billed To Card
+        doc.roundedRect(310, billedY, 240, 130, 6)
+           .fill(colors.bgLight)
+           .stroke(colors.border);
+        
+        doc.fontSize(10)
+           .font('Helvetica-Bold')
+           .fillColor(colors.primary)
+           .text('BILLED TO', 320, billedY + 12);
+        
+        doc.fontSize(9)
+           .font('Helvetica')
+           .fillColor(colors.textMedium);
 
-        doc.font('Helvetica').fontSize(9);
-
-        // Amount row
-        doc.text('Amount', 420, summaryY);
-        doc.text(`₹${taxableAmount.toLocaleString('en-IN')}`, 510, summaryY, { align: 'right' });
-
-        // CGST row
-        doc.text(`CGST (${(gstRate / 2).toFixed(2)}%)`, 420, summaryY + 18);
-        doc.text(`₹${cgstAmount.toLocaleString('en-IN')}`, 510, summaryY + 18, { align: 'right' });
-
-        // SGST row
-        doc.text(`SGST (${(gstRate / 2).toFixed(2)}%)`, 420, summaryY + 36);
-        doc.text(`₹${sgstAmount.toLocaleString('en-IN')}`, 510, summaryY + 36, { align: 'right' });
-
-        // Total row with border top
-        doc.strokeColor('#000000').lineWidth(0.5)
-            .moveTo(400, summaryY + 52)
-            .lineTo(550, summaryY + 52)
-            .stroke();
-
-        doc.font('Helvetica-Bold');
-        doc.text('Total (INR)', 420, summaryY + 58);
-        doc.text(`₹${bill.totalAmount.toLocaleString('en-IN')}`, 510, summaryY + 58, { align: 'right' });
-
-        // ========== BANK DETAILS SECTION ==========
-        const bankY = summaryY + 95;
-
-        doc.font('Helvetica-Bold').fontSize(9).fillColor('#000000');
-        doc.text('Bank Details', 50, bankY);
-
-        doc.font('Helvetica').fontSize(8).fillColor('#333333');
-        doc.text('Account Name: VIRAL ADS MEDIA', 50, bankY + 15);
-        doc.text('Account Number: 2402244856193850', 50, bankY + 28);
-        doc.text('IFSC: AUBL0002448', 50, bankY + 41);
-        doc.text('Account Type: Current', 50, bankY + 54);
-        doc.text('Bank: AU Small Finance Bank', 50, bankY + 67);
-
-        // ========== NOTES SECTION ==========
-        if (bill.notes) {
-            const notesY = bankY + 95;
-            doc.font('Helvetica-Bold').fontSize(8).fillColor('#000000');
-            doc.text('Notes:', 50, notesY);
-            doc.font('Helvetica').fontSize(8).fillColor('#666666');
-            doc.text(bill.notes, 50, notesY + 12, { width: 500 });
+        const client = bill.clientId;
+        let toY = billedY + 32;
+        doc.text(client.companyName || client.name, 320, toY);
+        
+        if (client.address) {
+            const address = client.address;
+            let remaining = address;
+            let lineY = toY + 14;
+            while (remaining.length > 38) {
+                let splitIndex = remaining.lastIndexOf(' ', 38);
+                if (splitIndex === -1) splitIndex = 38;
+                doc.text(remaining.substring(0, splitIndex), 320, lineY);
+                remaining = remaining.substring(splitIndex + 1);
+                lineY += 14;
+            }
+            if (remaining.length > 0) {
+                doc.text(remaining, 320, lineY);
+                lineY += 14;
+            }
+            toY = lineY - 14;
         }
 
-        // ========== AUTHORISED SIGNATORY SECTION ==========
-        const footerY = doc.page.height - 80;
+        let infoY = toY + 28;
+        if (client.gstNumber) {
+            doc.text(`GSTIN: ${client.gstNumber}`, 320, infoY);
+            infoY += 16;
+        }
+        if (client.email) {
+            doc.text(`Email: ${client.email}`, 320, infoY);
+            infoY += 16;
+        }
+        if (client.phone) {
+            doc.text(`Phone: ${client.phone}`, 320, infoY);
+        }
 
-        doc.font('Helvetica-Bold').fontSize(9).fillColor('#000000');
-        doc.text('Authorised Signatory', 50, footerY);
+        // ==================== PAYMENT SUMMARY CARD ====================
+        const paymentCardY = 290;
+        
+        // Payment Summary Box with gradient effect (using filled rect)
+        doc.roundedRect(50, paymentCardY, 495, 50, 8)
+           .fill(colors.bgCard)
+           .stroke(colors.primary);
+        
+        // Left accent bar
+        doc.rect(50, paymentCardY, 6, 50).fill(colors.primary);
+        
+        doc.fillColor(colors.primary)
+           .font('Helvetica-Bold')
+           .fontSize(10)
+           .text('PAYMENT SUMMARY', 70, paymentCardY + 10);
+        
+        doc.fontSize(9).fillColor(colors.textDark);
+        
+        // Total Amount
+        doc.font('Helvetica').fillColor(colors.textMedium);
+        doc.text('Total Amount:', 70, paymentCardY + 30);
+        doc.font('Helvetica-Bold').fillColor(colors.textDark);
+        doc.text(formatCurrency(bill.totalAmount), 170, paymentCardY + 30);
+        
+        // Paid Amount
+        doc.font('Helvetica').fillColor(colors.textMedium);
+        doc.text('Paid Amount:', 300, paymentCardY + 30);
+        doc.font('Helvetica-Bold').fillColor(colors.success);
+        doc.text(formatCurrency(bill.paidAmount || 0), 400, paymentCardY + 30);
+        
+        // Due Amount
+        const dueAmount = (bill.totalAmount - (bill.paidAmount || 0));
+        doc.font('Helvetica').fillColor(colors.textMedium);
+        doc.text('Due Amount:', 70, paymentCardY + 42);
+        doc.font('Helvetica-Bold').fillColor(dueAmount > 0 ? colors.danger : colors.success);
+        doc.text(formatCurrency(dueAmount), 170, paymentCardY + 42);
+        
+        // Status Badge
+        doc.font('Helvetica').fillColor(colors.textMedium);
+        doc.text('Status:', 300, paymentCardY + 42);
+        
+        let statusColor = colors.warning;
+        let statusText = bill.status || 'Pending';
+        let bgColor = '#FEF3C7';
+        if (bill.paidAmount >= bill.totalAmount) {
+            statusColor = colors.success;
+            statusText = 'PAID';
+            bgColor = '#D1FAE5';
+        } else if (bill.paidAmount > 0) {
+            statusColor = colors.warning;
+            statusText = 'PARTIALLY PAID';
+            bgColor = '#FEF3C7';
+        } else {
+            statusColor = colors.danger;
+            statusText = 'PENDING';
+            bgColor = '#FEE2E2';
+        }
+        
+        // Status badge
+        const badgeWidth = 90;
+        const badgeHeight = 18;
+        doc.roundedRect(400, paymentCardY + 32, badgeWidth, badgeHeight, 4)
+           .fill(bgColor);
+        doc.fillColor(statusColor)
+           .font('Helvetica-Bold')
+           .text(statusText, 445 - (badgeWidth / 2), paymentCardY + 36, { align: 'center' });
+
+        // ==================== TABLE ====================
+        const tableTop = 365;
+        
+        // Table Header
+        doc.roundedRect(50, tableTop, 495, 30, 4)
+           .fill(colors.primary);
+        
+        doc.fillColor('#fff')
+           .font('Helvetica-Bold')
+           .fontSize(9);
+
+        doc.text('ITEM / SERVICE', 60, tableTop + 10);
+        doc.text('GST RATE', 195, tableTop + 10);
+        doc.text('QTY', 265, tableTop + 10);
+        doc.text('RATE (₹)', 315, tableTop + 10);
+        doc.text('AMOUNT (₹)', 380, tableTop + 10);
+        doc.text('CGST (₹)', 450, tableTop + 10);
+        doc.text('SGST (₹)', 505, tableTop + 10, { align: 'right' });
+
+        let rowY = tableTop + 30;
+        let serialNo = 1;
+        let grandTotalBeforeGst = 0;
+        let totalCgst = 0;
+        let totalSgst = 0;
+
+        // Handle services
+        let servicesList = [];
+        if (bill.services && bill.services.length > 0) {
+            servicesList = bill.services;
+        } else {
+            servicesList = [{
+                serviceName: bill.serviceName || 'Service',
+                description: bill.description || '',
+                quantity: 1,
+                unitPrice: bill.totalAmount - (bill.gstAmount || 0),
+                totalPrice: bill.totalAmount - (bill.gstAmount || 0),
+                gstRate: 18,
+                gstAmount: bill.gstAmount || 0
+            }];
+        }
+
+        servicesList.forEach((service, index) => {
+            const amount = service.totalPrice || service.unitPrice || 0;
+            const gstAmount = service.gstAmount || (amount * (service.gstRate || 18) / 100) || 0;
+            const cgst = gstAmount / 2;
+            const sgst = gstAmount / 2;
+            const rate = service.unitPrice || amount;
+            const qty = service.quantity || 1;
+            const gstRate = service.gstRate || 18;
+            
+            grandTotalBeforeGst += amount;
+            totalCgst += cgst;
+            totalSgst += sgst;
+
+            const hasDesc = service.description && service.description.length > 0;
+            const rowHeight = hasDesc ? 52 : 38;
+
+            // Row background (alternating colors)
+            if (index % 2 === 0) {
+                doc.rect(50, rowY, 495, rowHeight).fill('#FFFFFF');
+            } else {
+                doc.rect(50, rowY, 495, rowHeight).fill(colors.bgLight);
+            }
+            doc.rect(50, rowY, 495, rowHeight).stroke(colors.border);
+
+            doc.fillColor(colors.textDark)
+               .font('Helvetica')
+               .fontSize(9);
+            
+            // Service name with serial
+            doc.text(`${serialNo}. ${service.serviceName}`, 60, rowY + 8, { width: 130 });
+            
+            // Description if exists
+            if (hasDesc) {
+                doc.fontSize(8)
+                   .fillColor(colors.textLight)
+                   .text(service.description, 60, rowY + 24, { width: 130 });
+                doc.fontSize(9)
+                   .fillColor(colors.textDark);
+            }
+
+            // Table data
+            doc.text(`${gstRate}%`, 200, rowY + (hasDesc ? 12 : 8));
+            doc.text(qty.toString(), 270, rowY + (hasDesc ? 12 : 8));
+            doc.text(formatCurrency(rate), 320, rowY + (hasDesc ? 12 : 8));
+            doc.text(formatCurrency(amount), 385, rowY + (hasDesc ? 12 : 8));
+            doc.text(formatCurrency(cgst), 450, rowY + (hasDesc ? 12 : 8));
+            doc.text(formatCurrency(sgst), 515, rowY + (hasDesc ? 12 : 8), { align: 'right' });
+
+            rowY += rowHeight;
+            serialNo++;
+        });
+
+        // ==================== SUMMARY SECTION ====================
+        const summaryY = rowY + 20;
+        
+        // Summary Box with premium styling
+        doc.roundedRect(330, summaryY, 215, 110, 8)
+           .fill(colors.bgLight)
+           .stroke(colors.primary);
+        
+        doc.fillColor(colors.primary)
+           .font('Helvetica-Bold')
+           .fontSize(10)
+           .text('INVOICE SUMMARY', 345, summaryY + 12);
+
+        doc.fontSize(9)
+           .font('Helvetica');
+        
+        let sumY = summaryY + 32;
+        
+        doc.fillColor(colors.textMedium);
+        doc.text('Subtotal:', 345, sumY);
+        doc.fillColor(colors.textDark);
+        doc.text(formatCurrency(grandTotalBeforeGst), 500, sumY, { align: 'right' });
+
+        sumY += 20;
+        doc.fillColor(colors.textMedium);
+        doc.text('CGST (9%):', 345, sumY);
+        doc.fillColor(colors.textDark);
+        doc.text(formatCurrency(totalCgst), 500, sumY, { align: 'right' });
+
+        sumY += 20;
+        doc.fillColor(colors.textMedium);
+        doc.text('SGST (9%):', 345, sumY);
+        doc.fillColor(colors.textDark);
+        doc.text(formatCurrency(totalSgst), 500, sumY, { align: 'right' });
+
+        // Divider
+        sumY += 20;
+        doc.moveTo(345, sumY).lineTo(530, sumY).lineWidth(0.5).stroke(colors.border);
+        sumY += 12;
+
+        doc.font('Helvetica-Bold')
+           .fontSize(11)
+           .fillColor(colors.primary);
+        doc.text('GRAND TOTAL', 345, sumY);
+        doc.text(formatCurrency(bill.totalAmount), 500, sumY, { align: 'right' });
+
+        // ==================== BANK DETAILS ====================
+        const bankY = summaryY + 135;
+
+        doc.roundedRect(50, bankY, 260, 85, 6)
+           .fill(colors.bgLight)
+           .stroke(colors.border);
+        
+        doc.fillColor(colors.primary)
+           .font('Helvetica-Bold')
+           .fontSize(9)
+           .text('BANK DETAILS', 60, bankY + 10);
+        
+        doc.font('Helvetica')
+           .fontSize(8)
+           .fillColor(colors.textMedium);
+
+        doc.text('Account Name:', 60, bankY + 30);
+        doc.font('Helvetica-Bold').fillColor(colors.textDark);
+        doc.text('VIRAL ADS MEDIA', 150, bankY + 30);
+        
+        doc.font('Helvetica').fillColor(colors.textMedium);
+        doc.text('Account Number:', 60, bankY + 44);
+        doc.font('Helvetica-Bold').fillColor(colors.textDark);
+        doc.text('2402244856193850', 150, bankY + 44);
+        
+        doc.font('Helvetica').fillColor(colors.textMedium);
+        doc.text('IFSC:', 60, bankY + 58);
+        doc.font('Helvetica-Bold').fillColor(colors.textDark);
+        doc.text('AUBL0002448', 150, bankY + 58);
+        
+        doc.font('Helvetica').fillColor(colors.textMedium);
+        doc.text('Account Type:', 60, bankY + 72);
+        doc.font('Helvetica-Bold').fillColor(colors.textDark);
+        doc.text('Current', 150, bankY + 72);
+        
+        doc.font('Helvetica').fillColor(colors.textMedium);
+        doc.text('Bank:', 60, bankY + 86);
+        doc.font('Helvetica-Bold').fillColor(colors.textDark);
+        doc.text('AU Small Finance Bank', 150, bankY + 86);
+
+        // ==================== PAYMENT HISTORY (if any) ====================
+        let paymentHistoryY = bankY + 105;
+        
+        if (bill.payments && bill.payments.length > 0) {
+            doc.roundedRect(50, paymentHistoryY, 495, Math.min(70 + (bill.payments.length * 18), 120), 6)
+               .fill(colors.bgLight)
+               .stroke(colors.border);
+            
+            doc.fillColor(colors.primary)
+               .font('Helvetica-Bold')
+               .fontSize(9)
+               .text('PAYMENT HISTORY', 60, paymentHistoryY + 10);
+            
+            doc.font('Helvetica')
+               .fontSize(8)
+               .fillColor(colors.textMedium);
+            
+            let payY = paymentHistoryY + 30;
+            
+            bill.payments.forEach((payment, idx) => {
+                doc.text(`${idx + 1}. ${formatCurrency(payment.amount)} - ${payment.paymentMethod || 'N/A'} - ${new Date(payment.paymentDate).toLocaleDateString('en-IN')}`, 
+                    60, payY);
+                if (payment.remarks) {
+                    doc.fontSize(7)
+                       .fillColor(colors.textLight)
+                       .text(`   ${payment.remarks}`, 60, payY + 10);
+                    payY += 10;
+                }
+                payY += 14;
+            });
+            paymentHistoryY = payY + 20;
+        }
+
+        // ==================== FOOTER & SIGNATURE ====================
+        const footerY = Math.max(720, paymentHistoryY + 40);
+
+        // Signature section
+        doc.fontSize(10)
+           .font('Helvetica-Bold')
+           .fillColor(colors.textDark)
+           .text('Authorised Signatory', 50, footerY);
+        
+        doc.moveTo(50, footerY + 22).lineTo(160, footerY + 22).lineWidth(0.6).stroke(colors.border);
+        doc.fontSize(8)
+           .fillColor(colors.textLight)
+           .text('(Signature)', 80, footerY + 24);
 
         // Thank you message
-        doc.font('Helvetica').fontSize(8).fillColor('#666666');
-        doc.text('Thank you for your business!', 250, footerY, { align: 'center' });
+        doc.fontSize(10)
+           .font('Helvetica')
+           .fillColor(colors.primary)
+           .text('Thank you for your business!', 250, footerY, { align: 'center', width: 250 });
 
-        // ========== FOOTER ==========
-        doc.fontSize(7).font('Helvetica').fillColor('#999999');
-        doc.text('For any enquiry, reach out via email at info@viraladsmedia.com, call on +91 93544 91934', 50, doc.page.height - 50, { align: 'center' });
-
-        // Bottom border line
-        doc.strokeColor('#000000').lineWidth(0.5)
-            .moveTo(50, doc.page.height - 35)
-            .lineTo(550, doc.page.height - 35)
-            .stroke();
+        // ==================== FOOTER BAR ====================
+        const footerBarY = footerY + 55;
+        
+        doc.rect(0, footerBarY, 612, 40).fill(colors.primary);
+        
+        doc.fillColor('#fff')
+           .fontSize(8)
+           .font('Helvetica')
+           .text('For any enquiry, reach out via email at info@viraladsmedia.com, call on +91 93544 91934', 
+                50, footerBarY + 12, { align: 'center', width: 512 });
+        
+        doc.fontSize(7)
+           .fillColor('#BFDBFE')
+           .text('Terms: Payment is due within 15 days of invoice date. Late payments may incur additional charges.', 
+                50, footerBarY + 26, { align: 'center', width: 512 });
 
         doc.end();
 
     } catch (error) {
-        console.error('Download bill error:', error);
+        console.error('PDF Generation Error:', error);
         if (!res.headersSent) {
-            return res.status(500).json({
-                success: false,
-                message: 'Server error while downloading bill',
-                error: error.message
-            });
+            res.status(500).json({ success: false, message: 'Error generating PDF: ' + error.message });
         }
     }
 };
