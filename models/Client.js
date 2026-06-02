@@ -34,6 +34,7 @@ const clientSchema = new mongoose.Schema({
         type: String,
         required: false
     },
+     leadOwner: { type: String, default: '' },
     clientStatus: {
         type: String,
         required: true,

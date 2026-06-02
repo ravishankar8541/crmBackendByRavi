@@ -1,4 +1,5 @@
 const Client = require('../models/Client')
+
 exports.addClient = async (req, res) => {
     try {
         const { 
@@ -8,13 +9,11 @@ exports.addClient = async (req, res) => {
             companyName, 
             gstNumber, 
             category, 
-            address, 
+            address,
+            leadOwner,      // ✅ ADDED
             clientStatus, 
             remarks
         } = req.body;
-
-
-         
 
         // 1. Basic Validation
         if (!name || !email || !phone || !companyName) {
@@ -45,13 +44,13 @@ exports.addClient = async (req, res) => {
             gstNumber,
             category,
             address,
+            leadOwner: leadOwner || '',     // ✅ ADDED
             clientStatus: clientStatus || "New Client",
             remarks
         });
 
         // 4. Save to Database
         await newClient.save();
-        
 
         // 5. Success Response
         return res.status(201).json({
@@ -69,7 +68,6 @@ exports.addClient = async (req, res) => {
         });
     }
 }
-
 
 exports.clients = async (req, res) => {
     try {
@@ -93,10 +91,6 @@ exports.clients = async (req, res) => {
     }
 }
 
-
-
-
-
 exports.editClient = async (req, res) => {
     try {
         const { id } = req.params;
@@ -105,6 +99,11 @@ exports.editClient = async (req, res) => {
         const client = await Client.findById(id);
         if (!client) {
             return res.status(404).json({ success: false, message: 'Client not found' });
+        }
+
+        // Update leadOwner if provided
+        if (updateData.leadOwner !== undefined) {
+            client.leadOwner = updateData.leadOwner;
         }
 
         // Latest fields update
@@ -162,8 +161,7 @@ exports.editClient = async (req, res) => {
         console.error('Editing client error:', error);
         return res.status(500).json({ success: false, message: error.message });
     }
-};
-
+}
 
 exports.deleteClient = async (req, res) => {
     const { id } = req.params; 
@@ -191,4 +189,3 @@ exports.deleteClient = async (req, res) => {
         });
     }
 };
-

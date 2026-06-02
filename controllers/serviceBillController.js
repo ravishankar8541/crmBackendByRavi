@@ -1,44 +1,49 @@
 const ServiceBill = require('../models/ServiceBill');
 const Bill = require('../models/Bill');
 
-// Create or update service bill when a new bill is generated
+// controllers/serviceBillController.js - FIXED VERSION
+
 exports.updateServiceBill = async (req, res) => {
     try {
         const { clientId, serviceName, totalAmount, billId, billNumber, initialPayment } = req.body;
 
-        // Find existing service bill or create new
         let serviceBill = await ServiceBill.findOne({ 
             clientId: clientId, 
             serviceName: serviceName 
         });
 
         if (!serviceBill) {
-            // CREATE NEW - first time bill
+            // CREATE NEW
             serviceBill = new ServiceBill({
                 clientId,
                 serviceName,
-                totalAmount: totalAmount,  // Fixed total amount
+                totalAmount: totalAmount,
                 paidAmount: initialPayment || 0,
-                dueAmount: totalAmount - (initialPayment || 0)
+                dueAmount: totalAmount - (initialPayment || 0),
+                status: initialPayment >= totalAmount ? 'Paid' : (initialPayment > 0 ? 'Partially Paid' : 'Pending')
             });
         } else {
-            // UPDATE EXISTING - ONLY add payment, NEVER change total amount
-            // ✅ FIX: Don't change totalAmount at all
-            // serviceBill.totalAmount remains the SAME as first bill
+            // ✅ FIX: For installment bills, add to totalAmount
+            const isNewBill = await Bill.findById(billId);
             
-            // Only add payment
+            if (isNewBill && isNewBill.status === 'Paid') {
+                // This is an installment bill - add amount to total
+                serviceBill.totalAmount += totalAmount;
+            }
+            
             serviceBill.paidAmount += initialPayment || 0;
             serviceBill.dueAmount = serviceBill.totalAmount - serviceBill.paidAmount;
+            
+            // ✅ FIX: Update status based on due amount
+            if (serviceBill.dueAmount <= 0) {
+                serviceBill.status = 'Paid';
+            } else if (serviceBill.paidAmount > 0) {
+                serviceBill.status = 'Partially Paid';
+            } else {
+                serviceBill.status = 'Pending';
+            }
         }
 
-        // Update status
-        if (serviceBill.paidAmount >= serviceBill.totalAmount) {
-            serviceBill.status = 'Paid';
-        } else if (serviceBill.paidAmount > 0) {
-            serviceBill.status = 'Partially Paid';
-        }
-
-        // Add bill reference (for history only)
         serviceBill.bills.push({
             billId: billId,
             billNumber: billNumber,
@@ -46,6 +51,18 @@ exports.updateServiceBill = async (req, res) => {
             paymentReceived: initialPayment || 0,
             date: new Date()
         });
+
+        if (initialPayment > 0) {
+            serviceBill.payments.push({
+                amount: initialPayment,
+                paymentMethod: req.body.paymentMethod || 'Cash',
+                transactionId: req.body.transactionId || '',
+                remarks: req.body.paymentRemarks || 'Payment',
+                receivedBy: req.user?.username || 'System',
+                billNumber: billNumber,
+                paymentDate: new Date()
+            });
+        }
 
         await serviceBill.save();
 
@@ -62,13 +79,14 @@ exports.updateServiceBill = async (req, res) => {
     }
 };
 
+// GET client service billing - FIXED to show correct due amount
 exports.getClientServiceBilling = async (req, res) => {
     try {
         const { clientId } = req.params;
         const serviceBills = await ServiceBill.find({ clientId: clientId });
         
         const processedServices = serviceBills.map(service => {
-            // Sirf payments se paid amount calculate karo
+            // Calculate total paid from payments array
             let totalPaid = 0;
             if (service.payments && service.payments.length > 0) {
                 service.payments.forEach(payment => {
@@ -81,7 +99,7 @@ exports.getClientServiceBilling = async (req, res) => {
             return {
                 _id: service._id,
                 serviceName: service.serviceName,
-                totalAmount: service.totalAmount,  // Yeh original amount hi rahega, kabhi badhega nahi
+                totalAmount: service.totalAmount,
                 paidAmount: totalPaid,
                 dueAmount: dueAmount > 0 ? dueAmount : 0,
                 status: dueAmount <= 0 ? 'Paid' : (totalPaid > 0 ? 'Partially Paid' : 'Pending'),
@@ -90,18 +108,26 @@ exports.getClientServiceBilling = async (req, res) => {
             };
         });
         
+        const totalBilled = processedServices.reduce((sum, s) => sum + s.totalAmount, 0);
+        const totalPaid = processedServices.reduce((sum, s) => sum + s.paidAmount, 0);
+        const totalDue = processedServices.reduce((sum, s) => sum + s.dueAmount, 0);
+        
         return res.status(200).json({
             success: true,
             data: {
-                totalBilled: processedServices.reduce((sum, s) => sum + s.totalAmount, 0),
-                totalPaid: processedServices.reduce((sum, s) => sum + s.paidAmount, 0),
-                totalDue: processedServices.reduce((sum, s) => sum + s.dueAmount, 0),
+                totalBilled,
+                totalPaid,
+                totalDue,
                 services: processedServices
             }
         });
     } catch (error) {
         console.error('Error:', error);
-        return res.status(500).json({ success: false, message: error.message, data: { services: [] } });
+        return res.status(500).json({ 
+            success: false, 
+            message: error.message, 
+            data: { services: [] } 
+        });
     }
 };
 

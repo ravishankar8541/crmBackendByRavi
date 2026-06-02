@@ -39,6 +39,10 @@ const serviceItemSchema = new mongoose.Schema({
         type: String,
         default: ''
     },
+     duration: {                    
+        type: String,
+        default: ''
+    },
     quantity: {
         type: Number,
         default: 1,
@@ -90,11 +94,17 @@ const billSchema = new mongoose.Schema({
         ref: 'Client',
         required: true
     },
+     clientName: { type: String, default: '' },
+    leadOwner: { type: String, default: '' },
     serviceName: {
         type: String,
         default: ''
     },
     description: {
+        type: String,
+        default: ''
+    },
+    duration: {                    
         type: String,
         default: ''
     },
@@ -125,6 +135,12 @@ const billSchema = new mongoose.Schema({
         type: Number,
         default: 0,
         min: 0
+    },
+      gstPercentage: {        
+        type: Number,
+        default: 0,
+        min: 0,
+        max: 100
     },
     cgst: {
         type: Number,

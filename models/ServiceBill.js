@@ -41,7 +41,7 @@ const serviceBillSchema = new mongoose.Schema({
         transactionId: String,
         remarks: String,
         receivedBy: String,
-        billNumber: String  // Which bill this payment belongs to
+        billNumber: String  
     }],
     bills: [{
         billId: { type: mongoose.Schema.Types.ObjectId, ref: 'Bill' },

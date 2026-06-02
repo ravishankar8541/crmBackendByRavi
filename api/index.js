@@ -14,7 +14,7 @@ const PORT = process.env.PORT || 5000;
 dbConnection();
 
 app.use(cors({
-  origin: 'https://www.viralcrm.in', 
+  origin: 'https://3-crm-frontend.vercel.app', 
   credentials: true,               
 }));
 app.use(express.json());
