@@ -23,10 +23,21 @@ const userSchema = new mongoose.Schema(
       enum: ['admin', 'hr', 'employee'],
       default: 'employee',
     },
+    resetPasswordToken: {
+      type: String,
+      default: null,
+    },
+    resetPasswordExpires: {
+      type: Date,
+      default: null,
+    },
+    lastPasswordChange: {
+      type: Date,
+      default: Date.now,
+    },
   },
   { timestamps: true }
 );
-
 
 // ✅ Correct password hashing
 userSchema.pre('save', async function () {
@@ -34,11 +45,9 @@ userSchema.pre('save', async function () {
   this.password = await bcrypt.hash(this.password, 12);
 });
 
-
 // ✅ Compare password
 userSchema.methods.comparePassword = async function (candidatePassword) {
   return bcrypt.compare(candidatePassword, this.password);
 };
-
 
 module.exports = mongoose.model('User', userSchema);

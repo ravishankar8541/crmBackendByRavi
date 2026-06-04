@@ -68,7 +68,9 @@ exports.createBill = async (req, res) => {
             paymentMethod,
             transactionId,
             paymentRemarks,
-            services
+            services,
+            isMultiServiceInstallment,
+            targetServiceBillId  // ✅ Added but not used yet
         } = req.body;
 
         if (!clientId) {
@@ -229,13 +231,80 @@ exports.createBill = async (req, res) => {
         console.log("✅ Bill saved successfully:", billNumber);
         await newBill.populate('clientId', 'name companyName email phone address gstNumber');
 
-        // ========== ✅ SERVICE BILL CREATION - ALWAYS CREATE NEW ==========
+        // ========== ✅ SERVICE BILL CREATION - FIXED WITH targetServiceBillId ==========
         try {
             console.log("🟢 Starting ServiceBill creation...");
+            console.log("   serviceName:", serviceName);
+            console.log("   isMultiServiceInstallment:", isMultiServiceInstallment);
+            console.log("   targetServiceBillId:", targetServiceBillId);
 
-            // ✅ CASE 1: MULTIPLE SERVICES
+            let isInstallmentForExistingMultiService = false;
+            let existingMultiServiceBill = null;
+            
+            // ✅ METHOD 1: DIRECTLY USE targetServiceBillId (MOST ACCURATE)
+            if (targetServiceBillId) {
+                existingMultiServiceBill = await ServiceBill.findById(targetServiceBillId);
+                if (existingMultiServiceBill && existingMultiServiceBill.isMultiService === true) {
+                    isInstallmentForExistingMultiService = true;
+                    console.log(`✅ Using targetServiceBillId: ${targetServiceBillId} - ${existingMultiServiceBill.serviceName}`);
+                } else if (existingMultiServiceBill) {
+                    console.log(`⚠️ Found service bill but it's not multi-service (isMultiService: ${existingMultiServiceBill.isMultiService})`);
+                } else {
+                    console.log(`⚠️ No service bill found with ID: ${targetServiceBillId}`);
+                }
+            }
+            
+            // ✅ METHOD 2: If no target ID but flag is true, try to find by service name
+            if (!isInstallmentForExistingMultiService && isMultiServiceInstallment === true && serviceName) {
+                existingMultiServiceBill = await ServiceBill.findOne({
+                    clientId: clientId,
+                    isMultiService: true,
+                    'services.serviceName': serviceName,
+                    status: { $ne: 'Paid' }
+                });
+                
+                if (existingMultiServiceBill) {
+                    isInstallmentForExistingMultiService = true;
+                    console.log(`✅ Found multi-service bill by service name match: ${existingMultiServiceBill.serviceName}`);
+                } else {
+                    // Try without status filter
+                    existingMultiServiceBill = await ServiceBill.findOne({
+                        clientId: clientId,
+                        isMultiService: true,
+                        'services.serviceName': serviceName
+                    });
+                    if (existingMultiServiceBill) {
+                        isInstallmentForExistingMultiService = true;
+                        console.log(`✅ Found multi-service bill (including paid): ${existingMultiServiceBill.serviceName}`);
+                    }
+                }
+            }
+            
+            // ✅ METHOD 3: Auto-detect from description (fallback)
+            if (!isInstallmentForExistingMultiService && serviceName && (!services || services.length === 0)) {
+                const isInstallmentDesc = description && (
+                    description.toLowerCase().includes('installment') || 
+                    (paymentRemarks && paymentRemarks.toLowerCase().includes('installment'))
+                );
+                
+                if (isInstallmentDesc) {
+                    existingMultiServiceBill = await ServiceBill.findOne({
+                        clientId: clientId,
+                        isMultiService: true,
+                        'services.serviceName': serviceName,
+                        status: { $ne: 'Paid' }
+                    });
+                    
+                    if (existingMultiServiceBill) {
+                        isInstallmentForExistingMultiService = true;
+                        console.log(`✅ Auto-detected installment for: ${existingMultiServiceBill.serviceName}`);
+                    }
+                }
+            }
+            
+            // ✅ CASE 1: MULTIPLE SERVICES (New multi-service contract)
             if (services && Array.isArray(services) && services.length > 0) {
-                console.log("📌 Creating ServiceBill for multi-service");
+                console.log("📌 Creating NEW multi-service contract");
                 
                 let totalContractValue = 0;
                 const serviceDetails = [];
@@ -279,7 +348,6 @@ exports.createBill = async (req, res) => {
                 console.log(`   Total Value: ₹${totalContractValue}`);
                 console.log(`   Payment: ₹${proportionalPayment}`);
                 
-                // ✅ ALWAYS CREATE NEW ServiceBill
                 const serviceBill = new ServiceBill({
                     clientId: clientId,
                     isMultiService: true,
@@ -313,86 +381,145 @@ exports.createBill = async (req, res) => {
                 }
                 
                 await serviceBill.save();
-                console.log(`✅ NEW ServiceBill created: ${contractName}`);
+                console.log(`✅ NEW multi-service contract created: ${contractName}`);
             }
             
-            // ✅ CASE 2: SINGLE SERVICE
+            // ✅ CASE 2: SINGLE SERVICE - Installment for existing multi-service
             else if (serviceName && (!services || services.length === 0)) {
                 console.log("📌 Processing SINGLE service:", serviceName);
+                console.log("   isInstallmentForExistingMultiService:", isInstallmentForExistingMultiService);
                 
-                let serviceBill = await ServiceBill.findOne({
-                    clientId: clientId,
-                    serviceName: serviceName,
-                    isMultiService: { $ne: true }
-                });
-
-                const serviceTotal = parsedTotalAmount;
-
-                if (!serviceBill) {
-                    serviceBill = new ServiceBill({
-                        clientId: clientId,
-                        serviceName: serviceName,
-                        isMultiService: false,
-                        duration: duration || '',
-                        totalAmount: serviceTotal,
-                        paidAmount: parsedInitialPayment,
-                        dueAmount: serviceTotal - parsedInitialPayment,
-                        status: parsedInitialPayment >= serviceTotal ? 'Paid' : 
-                                (parsedInitialPayment > 0 ? 'Partially Paid' : 'Pending'),
-                        bills: [{
-                            billId: newBill._id,
-                            billNumber: billNumber,
-                            amount: serviceTotal,
-                            paymentReceived: parsedInitialPayment,
-                            date: new Date()
-                        }]
-                    });
-                } else {
-                    const billAlreadyExists = serviceBill.bills.some(b => b.billNumber === billNumber);
+                // ✅ FIRST: Check if this is an installment for an existing multi-service contract
+                if (isInstallmentForExistingMultiService && existingMultiServiceBill) {
+                    console.log(`✅ THIS IS AN INSTALLMENT FOR EXISTING MULTI-SERVICE: ${existingMultiServiceBill.serviceName}`);
+                    console.log(`   Current paid: ${existingMultiServiceBill.paidAmount}, New payment: ${parsedInitialPayment}`);
+                    
+                    // ✅ CRITICAL: Check if this bill already exists
+                    const billAlreadyExists = existingMultiServiceBill.bills.some(b => b.billNumber === billNumber);
                     
                     if (!billAlreadyExists) {
-                        const isInstallmentBill = parsedInitialPayment === parsedTotalAmount &&
-                            parsedTotalAmount <= serviceBill.dueAmount;
-
-                        if (isInstallmentBill) {
-                            console.log(`📌 INSTALLMENT payment: +₹${parsedInitialPayment}`);
-                            serviceBill.paidAmount += parsedInitialPayment;
-                        } else {
-                            console.log(`📌 REGULAR bill: +₹${parsedTotalAmount} total, +₹${parsedInitialPayment} paid`);
-                            serviceBill.paidAmount += parsedInitialPayment;
+                        const newPaidAmount = existingMultiServiceBill.paidAmount + parsedInitialPayment;
+                        existingMultiServiceBill.paidAmount = newPaidAmount;
+                        existingMultiServiceBill.dueAmount = existingMultiServiceBill.totalAmount - newPaidAmount;
+                        
+                        // ✅ Prevent negative due amount
+                        if (existingMultiServiceBill.dueAmount < 0) {
+                            console.warn(`⚠️ Warning: Due amount went negative! Setting to 0`);
+                            existingMultiServiceBill.dueAmount = 0;
                         }
-
-                        serviceBill.dueAmount = serviceBill.totalAmount - serviceBill.paidAmount;
-                        serviceBill.status = serviceBill.paidAmount >= serviceBill.totalAmount ? 'Paid' : 
-                                            (serviceBill.paidAmount > 0 ? 'Partially Paid' : 'Pending');
-
-                        serviceBill.bills.push({
+                        
+                        existingMultiServiceBill.status = existingMultiServiceBill.paidAmount >= existingMultiServiceBill.totalAmount ? 'Paid' : 
+                                                          (existingMultiServiceBill.paidAmount > 0 ? 'Partially Paid' : 'Pending');
+                        
+                        existingMultiServiceBill.bills.push({
                             billId: newBill._id,
                             billNumber: billNumber,
                             amount: parsedTotalAmount,
                             paymentReceived: parsedInitialPayment,
                             date: new Date()
                         });
+                        
+                        if (parsedInitialPayment > 0) {
+                            const paymentExists = existingMultiServiceBill.payments.some(p => p.billNumber === billNumber);
+                            if (!paymentExists) {
+                                existingMultiServiceBill.payments.push({
+                                    amount: parsedInitialPayment,
+                                    paymentMethod: paymentMethod || 'Cash',
+                                    transactionId: transactionId || '',
+                                    remarks: paymentRemarks || `Installment payment for ${serviceName}`,
+                                    receivedBy: req.user?.username || 'System',
+                                    billNumber: billNumber,
+                                    paymentDate: new Date()
+                                });
+                            }
+                        }
+                        
+                        await existingMultiServiceBill.save();
+                        console.log(`✅ Payment added! New paid: ${existingMultiServiceBill.paidAmount}, Due: ${existingMultiServiceBill.dueAmount}`);
+                    } else {
+                        console.log(`   Bill already exists, skipping duplicate`);
                     }
                 }
-
-                if (parsedInitialPayment > 0) {
-                    const paymentExists = serviceBill.payments.some(p => p.billNumber === billNumber);
-                    if (!paymentExists) {
-                        serviceBill.payments.push({
-                            amount: parsedInitialPayment,
-                            paymentMethod: paymentMethod || 'Cash',
-                            transactionId: transactionId || '',
-                            remarks: paymentRemarks || 'Payment',
-                            receivedBy: req.user?.username || 'System',
-                            billNumber: billNumber,
-                            paymentDate: new Date()
+                // ✅ Regular single service (not related to any multi-service)
+                else {
+                    let serviceBill = await ServiceBill.findOne({
+                        clientId: clientId,
+                        serviceName: serviceName,
+                        isMultiService: { $ne: true }
+                    });
+                    
+                    const serviceTotal = parsedTotalAmount;
+                    
+                    if (!serviceBill) {
+                        serviceBill = new ServiceBill({
+                            clientId: clientId,
+                            serviceName: serviceName,
+                            isMultiService: false,
+                            duration: duration || '',
+                            totalAmount: serviceTotal,
+                            paidAmount: parsedInitialPayment,
+                            dueAmount: serviceTotal - parsedInitialPayment,
+                            status: parsedInitialPayment >= serviceTotal ? 'Paid' : 
+                                    (parsedInitialPayment > 0 ? 'Partially Paid' : 'Pending'),
+                            bills: [{
+                                billId: newBill._id,
+                                billNumber: billNumber,
+                                amount: serviceTotal,
+                                paymentReceived: parsedInitialPayment,
+                                date: new Date()
+                            }]
                         });
+                    } else {
+                        const billAlreadyExists = serviceBill.bills.some(b => b.billNumber === billNumber);
+                        
+                        if (!billAlreadyExists) {
+                            const isInstallmentBill = parsedInitialPayment === parsedTotalAmount &&
+                                parsedTotalAmount <= serviceBill.dueAmount;
+                            
+                            if (isInstallmentBill) {
+                                console.log(`📌 INSTALLMENT payment for single service: +₹${parsedInitialPayment}`);
+                                serviceBill.paidAmount += parsedInitialPayment;
+                            } else {
+                                console.log(`📌 REGULAR bill for single service: +₹${parsedTotalAmount} total, +₹${parsedInitialPayment} paid`);
+                                serviceBill.paidAmount += parsedInitialPayment;
+                            }
+                            
+                            serviceBill.dueAmount = serviceBill.totalAmount - serviceBill.paidAmount;
+                            
+                            if (serviceBill.dueAmount < 0) serviceBill.dueAmount = 0;
+                            
+                            serviceBill.status = serviceBill.paidAmount >= serviceBill.totalAmount ? 'Paid' : 
+                                                (serviceBill.paidAmount > 0 ? 'Partially Paid' : 'Pending');
+                            
+                            serviceBill.bills.push({
+                                billId: newBill._id,
+                                billNumber: billNumber,
+                                amount: parsedTotalAmount,
+                                paymentReceived: parsedInitialPayment,
+                                date: new Date()
+                            });
+                        }
                     }
+                    
+                    if (parsedInitialPayment > 0) {
+                        const paymentExists = serviceBill.payments?.some(p => p.billNumber === billNumber);
+                        if (!paymentExists) {
+                            if (!serviceBill.payments) serviceBill.payments = [];
+                            serviceBill.payments.push({
+                                amount: parsedInitialPayment,
+                                paymentMethod: paymentMethod || 'Cash',
+                                transactionId: transactionId || '',
+                                remarks: paymentRemarks || 'Payment',
+                                receivedBy: req.user?.username || 'System',
+                                billNumber: billNumber,
+                                paymentDate: new Date()
+                            });
+                        }
+                    }
+                    
+                    await serviceBill.save();
+                    console.log(`✅ ServiceBill saved for: ${serviceName}`);
                 }
-
-                await serviceBill.save();
-                console.log(`✅ ServiceBill saved for: ${serviceName}`);
             }
 
         } catch (serviceBillError) {
