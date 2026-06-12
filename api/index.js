@@ -14,7 +14,7 @@ const PORT = process.env.PORT || 5000;
 dbConnection();
 
 app.use(cors({
-  origin: 'https://www.viralcrm.in', 
+  origin: ['https://www.viralcrm.in', 'https://viralcrm.in'], 
   credentials: true,               
 }));
 app.use(express.json());
