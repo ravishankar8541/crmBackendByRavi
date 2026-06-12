@@ -26,7 +26,13 @@ app.use('/api/client', client);
 app.use('/api/bills', billRoutes);
 app.use('/api/service-bills', serviceBillRoutes);
 
-
+app.get('/', (req, res) => {
+  res.status(200).json({
+    status: "success",
+    message: "ViralCRM Backend is Live and Running perfectly!",
+    timestamp: new Date()
+  });
+});
 
 app.get('/uploads/debug-test', (req, res) => {
   res.send('Static middleware is active!');
