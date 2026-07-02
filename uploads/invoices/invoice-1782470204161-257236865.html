@@ -1,0 +1,521 @@
+
+  <!DOCTYPE html>
+  <html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <title>Invoice INV/2026/06/0041</title>
+    <style>
+      @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+      
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      
+      @page {
+        size: A4;
+        margin: 0;
+      }
+      
+      body {
+        font-family: 'Inter', sans-serif;
+        background: #f8fafc;
+        color: #1e293b;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+      }
+      
+      .invoice-container {
+        width: 210mm;
+        min-height: 297mm;
+        margin: 0 auto;
+        background: #ffffff;
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        justify-content: flex-start;
+        gap: 30px;
+        padding: 45px;
+        box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.05);
+      }
+      
+      .header-section {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        border-bottom: 2px solid #f1f5f9;
+        padding-bottom: 20px;
+      }
+      
+      .invoice-title-area h1 {
+        font-size: 36px;
+        font-weight: 800;
+        letter-spacing: -0.025em;
+        color: #4f46e5;
+        margin-bottom: 8px;
+        text-transform: uppercase;
+      }
+      
+      .invoice-meta {
+        font-size: 13px;
+        color: #475569;
+        margin-bottom: 5px;
+      }
+      
+      .invoice-meta strong {
+        color: #0f172a;
+        font-weight: 600;
+      }
+      
+      .logo-box {
+        width: 160px;
+        text-align: right;
+      }
+      
+      .logo-box img {
+        max-width: 100%;
+        height: auto;
+      }
+      
+      .billing-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 25px;
+      }
+      
+      .billing-box {
+        background: #f8fafc;
+        border: 1px solid #f1f5f9;
+        border-radius: 10px;
+        padding: 20px;
+      }
+      
+      .billing-box h2 {
+        font-size: 13px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: #4f46e5;
+        margin-bottom: 10px;
+      }
+      
+      .billing-box .company-name {
+        font-size: 15px;
+        font-weight: 700;
+        color: #0f172a;
+        margin-bottom: 6px;
+      }
+      
+      .billing-box p {
+        font-size: 12px;
+        color: #334155;
+        line-height: 1.6;
+      }
+
+      .table-container {
+        margin-top: 5px;
+      }
+      
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        border: 1px solid #e2e8f0;
+        border-radius: 8px;
+        overflow: hidden;
+      }
+      
+      th {
+        background: #4f46e5;
+        color: #ffffff;
+        padding: 12px 14px;
+        font-size: 12px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        text-align: center;
+      }
+      
+      th:first-child { text-align: left; }
+      th:last-child { text-align: right; }
+      
+      td {
+        padding: 14px;
+        font-size: 13px;
+        color: #334155;
+        border-bottom: 1px solid #e2e8f0;
+        vertical-align: middle;
+        text-align: center;
+      }
+      
+      td:first-child { text-align: left; }
+      td:last-child { text-align: right; font-weight: 700; color: #0f172a; }
+      
+      .item-row-main {
+        background: #ffffff;
+      }
+      
+      .item-row-sub {
+        background: #fafafa;
+      }
+      
+      .bottom-section {
+        display: flex;
+        flex-direction: column;
+        gap: 25px;
+        margin-top: auto;
+      }
+      
+      .words-and-calculation {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 20px;
+        border-bottom: 1px dashed #e2e8f0;
+        padding-bottom: 20px;
+      }
+      
+      .total-words {
+        font-size: 12px;
+        font-weight: 500;
+        color: #475569;
+        max-width: 55%;
+        line-height: 1.5;
+        background: #f1f5f9;
+        padding: 12px 16px;
+        border-radius: 8px;
+      }
+      
+      .calculation-box {
+        width: 40%;
+      }
+      
+      .calc-row {
+        display: flex;
+        justify-content: space-between;
+        padding: 6px 0;
+        font-size: 13px;
+        color: #475569;
+      }
+      
+      .calc-row.final-total {
+        border-top: 2px dashed #4f46e5;
+        margin-top: 8px;
+        padding-top: 12px;
+        font-size: 18px;
+        font-weight: 800;
+        color: #4f46e5;
+      }
+      
+      .details-and-qr-grid {
+        display: grid;
+        grid-template-columns: 1.25fr 0.75fr;
+        gap: 25px;
+        align-items: center;
+      }
+      
+      .bank-details-box {
+        border: 1px solid #e2e8f0;
+        border-radius: 10px;
+        padding: 18px;
+        background: #ffffff;
+      }
+      
+      .bank-details-box h3 {
+        font-size: 13px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: #0f172a;
+        margin-bottom: 12px;
+        border-bottom: 2px solid #f1f5f9;
+        padding-bottom: 6px;
+      }
+      
+      .bank-table {
+        width: 100%;
+      }
+      
+      .bank-table td {
+        border: none;
+        padding: 5px 0;
+        text-align: left;
+        font-size: 12px;
+        background: transparent !important;
+      }
+      
+      .bank-table td.label {
+        font-weight: 600;
+        color: #64748b;
+        width: 38%;
+      }
+      
+      .bank-table td.value {
+        color: #0f172a;
+        font-weight: 600;
+      }
+      
+      .qr-block {
+        text-align: center;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        background: #f8fafc;
+        border: 1px solid #e2e8f0;
+        border-radius: 10px;
+        padding: 15px;
+      }
+      
+      .qr-title {
+        font-size: 12px;
+        color: #4f46e5;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        margin-bottom: 4px;
+      }
+      
+      .qr-subtitle {
+        font-size: 9px;
+        color: #64748b;
+        max-width: 180px;
+        line-height: 1.4;
+        margin-bottom: 10px;
+      }
+      
+      .qr-block img {
+        width: 110px;
+        height: 110px;
+        border: 1px solid #e2e8f0;
+        border-radius: 6px;
+        padding: 6px;
+        background: #ffffff;
+      }
+      
+      .qr-vpa {
+        font-size: 12px;
+        font-weight: 700;
+        color: #0f172a;
+        margin-top: 8px;
+        background: #ffffff;
+        padding: 2px 10px;
+        border-radius: 20px;
+        border: 1px solid #e2e8f0;
+      }
+      
+      .footer-terms-area {
+        border-top: 2px solid #f1f5f9;
+        padding-top: 15px;
+      }
+      
+      .terms-link {
+        font-size: 12px;
+        color: #4f46e5;
+        text-decoration: none;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        margin-bottom: 8px;
+        display: inline-block;
+      }
+      
+      .dynamic-footer-metadata {
+        font-size: 11px;
+        color: #64748b;
+        line-height: 1.6;
+        margin-bottom: 20px;
+      }
+      
+      .signature-row-wrapper {
+        display: flex;
+        justify-content: flex-end;
+        margin-bottom: 15px;
+      }
+
+      .signature-container {
+        text-align: right;
+      }
+
+      .signature-container img {
+        max-height: 55px;
+        object-fit: contain;
+        margin-bottom: 4px;
+      }
+
+      .signature-line {
+        width: 180px;
+        border-bottom: 2px solid #0f172a;
+        margin: 6px 0 6px auto;
+      }
+
+      .signature-container p {
+        font-size: 12px;
+        font-weight: 700;
+        color: #0f172a;
+      }
+
+      .signature-container span {
+        font-size: 10px;
+        color: #64748b;
+      }
+      
+      .system-generated-text {
+        text-align: center;
+        font-size: 10px;
+        font-weight: 500;
+        color: #94a3b8;
+        width: 100%;
+        border-top: 1px solid #f1f5f9;
+        padding-top: 10px;
+      }
+      
+      @media print {
+        body { background: #ffffff; }
+        .invoice-container { padding: 45px; height: 297mm; width: 210mm; box-shadow: none; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="invoice-container">
+      <div>
+        <div class="header-section">
+          <div class="invoice-title-area">
+            <h1>Invoice</h1>
+            <div class="invoice-meta">Invoice No # <strong>INV/2026/06/0041</strong></div>
+            <div class="invoice-meta">Invoice Date <strong>26 Jun 2026</strong></div>
+          </div>
+          <div class="brand-logo-area">
+            <div class="logo-box">
+              <img src="/logo3.png" alt="Viral Ads Media Logo">
+            </div>
+          </div>
+        </div>
+        
+        <div class="billing-grid" style="margin-top: 25px; margin-bottom: 25px;">
+          <div class="billing-box">
+            <h2>Billed By</h2>
+            <div class="company-name">Viral Ads Media</div>
+            <p>B-27, Khatu shyam Mandir Road, near Max Bazar, Budh Vihar Phase I, New Delhi, Delhi, India - 110086</p>
+            <p style="margin-top: 6px;"><strong>GSTIN:</strong> 07DTXPK7339P1ZF</p>
+            <p><strong>PAN:</strong> DTXPK7339P</p>
+            <p><strong>Email:</strong> info@viraladsmedia.com</p>
+            <p><strong>Phone:</strong> +91 93544 91934</p>
+          </div>
+          <div class="billing-box">
+            <h2>Billed To</h2>
+            <div class="company-name">Solo Software Tech Solutions</div>
+            <p>20 Kilometer Milestone, Bahadurgarh-Jhajjar Road Kablana,</p>
+            <p style="margin-top: 6px;"><strong>GSTIN:</strong> 123WEEE</p>
+            <p><strong>Phone:</strong> 9431269468</p>
+            <p><strong>Email:</strong> sujeet@gmail.com</p>
+          </div>
+        </div>
+        
+        <div class="table-container">
+          <table>
+            <thead>
+              <tr>
+                <th style="width: 40%;">Item Description</th>
+                <th style="width: 12%;">HSN/SAC</th>
+                <th style="width: 12%;">GST Rate</th>
+                <th style="width: 12%;">GST</th>
+                <th style="width: 12%;">Taxable Amt</th>
+                <th style="width: 12%;">Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr class="item-row-main">
+                <td style="font-weight: 600; color: #0f172a;">Digital Marketing</td>
+                <td style="font-weight: 500;">998311</td>
+                <td>CGST (9%) + SGST (9%)</td>
+                <td>₹3,662.00</td>
+                <td>₹20,339.00</td>
+                <td>₹24,000.00</td>
+              </tr>
+              <tr class="item-row-sub">
+                <td colspan="6" style="color: #64748b; font-size: 12px; text-align: left; padding-left: 14px;">
+                  <strong>Service Details:</strong> Digital Marketing
+                  
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="bottom-section">
+        <div class="words-and-calculation">
+          <div class="total-words">
+            <strong>Total Amount in Words:</strong><br/>
+            <span style="text-transform: uppercase; font-size: 11px; color: #1e293b; font-weight: 600;">TWENTY FOUR THOUSAND RUPEES ONLY</span>
+          </div>
+          <div class="calculation-box">
+            <div class="calc-row">
+              <span>Subtotal (Taxable)</span>
+              <span style="font-weight: 600; color: #0f172a;">₹20,339.00</span>
+            </div>
+            
+        <div class="calc-row">
+          <span>CGST (9.0%)</span>
+          <span>₹1,831.00</span>
+        </div>
+        <div class="calc-row">
+          <span>SGST (9.0%)</span>
+          <span>₹1,831.00</span>
+        </div>
+      
+            <div class="calc-row final-total">
+              <span>Total (INR)</span>
+              <span>₹24,000.00</span>
+            </div>
+          </div>
+        </div>
+        
+        <div class="details-and-qr-grid">
+          <div class="bank-details-box">
+            <h3>Our Bank Details</h3>
+            <table class="bank-table">
+              <tr><td class="label">Account Name</td><td class="value">VIRAL ADS MEDIA</td></tr>
+              <tr><td class="label">Account Number</td><td class="value">2402244856193850</td></tr>
+              <tr><td class="label">IFSC Code</td><td class="value">AUBL0002448</td></tr>
+              <tr><td class="label">Account Type</td><td class="value">Current</td></tr>
+              <tr><td class="label">Bank Name</td><td class="value">AU Small Finance Bank</td></tr>
+            </table>
+          </div>
+          
+          <div class="qr-block">
+        <div class="qr-title">Scan to pay via UPI</div>
+        <div class="qr-subtitle">Maximum of 1 lakh can be transferred via UPI in a single day</div>
+        <img src="data:image/png;base64,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" alt="UPI QR Code" />
+        <div class="qr-vpa">viraladsmedia@aubank</div>
+      </div>
+        </div>
+        
+        <div class="footer-terms-area">
+          <a href="#" class="terms-link">Terms & Conditions</a>
+          
+          <div class="dynamic-footer-metadata">
+            
+            
+            
+            
+            <br/>
+            1. All payments should be made in favor of VIRAL ADS MEDIA. 2. This is a payment receipt for the amount received.
+          </div>
+          
+          <div class="signature-row-wrapper">
+            <div class="signature-container">
+              <img src="/signature.png" alt="Authorised Signature">
+              <div class="signature-line"></div>
+              <p>Authorised Signatory</p>
+              <span>For Viral Ads Media</span>
+            </div>
+          </div>
+          
+          <div class="system-generated-text">This is an electronically generated document, no signature is required.</div>
+        </div>
+      </div>
+    </div>
+  </body>
+  </html>
+  

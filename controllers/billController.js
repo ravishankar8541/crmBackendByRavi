@@ -119,11 +119,11 @@ exports.createBill = async (req, res) => {
             parsedTotalAmount = parsedSubtotal + parsedTotalGst - discountAmount;
             parsedTotalAmount = Math.round(parsedTotalAmount);
         } else {
-       parsedTotalAmount = Math.round(parseFloat(totalAmount)) || 0;
-       parsedTotalAmount = Math.round(parsedTotalAmount);
+            parsedTotalAmount = Math.round(parseFloat(totalAmount)) || 0;
+            parsedTotalAmount = Math.round(parsedTotalAmount);
         }
 
-      const parsedInitialPayment = Math.round(parseFloat(initialPayment)) || 0;
+        const parsedInitialPayment = Math.round(parseFloat(initialPayment)) || 0;
 
         // Round to handle floating point issues
         const roundedTotal = Math.round(parsedTotalAmount);
@@ -194,8 +194,8 @@ exports.createBill = async (req, res) => {
             console.log("✅ Set duration from service:", newBill.duration);
         }
 
-      let due = parsedTotalAmount - parsedInitialPayment;
-newBill.dueAmount = due < 0 ? 0 : due;
+        let due = parsedTotalAmount - parsedInitialPayment;
+        newBill.dueAmount = due < 0 ? 0 : due;
         newBill.calculateBill();
 
         if (parsedInitialPayment > 0) {
@@ -534,15 +534,17 @@ newBill.dueAmount = due < 0 ? 0 : due;
             console.error('❌ Error creating service bill:', serviceBillError);
         }
 
-        console.log("========================================");
-        console.log("🎉 Bill creation completed!");
-        console.log("   Bill Number:", billNumber);
-        console.log("========================================");
-
+        // ✅ YAHAN SIRF YEH RETURN STATEMENT CHANGE KIYA HAI
         return res.status(201).json({
             success: true,
             message: parsedInitialPayment > 0 ? 'Bill created with initial payment' : 'Bill created successfully',
-            data: newBill
+            data: {
+                ...newBill.toObject(),
+                taxType: newBill.taxType,  // ✅ ADDED - taxType properly send karega
+                cgst: newBill.cgst,
+                sgst: newBill.sgst,
+                igst: newBill.igst
+            }
         });
 
     } catch (error) {
