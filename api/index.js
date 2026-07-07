@@ -12,6 +12,7 @@ const emailRoutes = require('../routes/emailRoutes');
 const pdfRoutes = require('../routes/pdfRoutes');
 
 
+
 const PORT = process.env.PORT || 5000;
 
 dbConnection();
@@ -31,6 +32,7 @@ app.use('/api/service-bills', serviceBillRoutes);
 app.use('/api/email', emailRoutes);
 app.use('/api/pdf', pdfRoutes);
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
+
 
 
 app.get('/', (req, res) => {
